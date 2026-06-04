@@ -1,0 +1,61 @@
+{
+  "name": "rpc-toolkit-js-client",
+  "version": "1.0.0",
+  "description": "Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.",
+  "type": "module",
+  "main": "./dist/rpc-client.cjs",
+  "module": "./dist/rpc-client.mjs",
+  "browser": "./dist/rpc-client.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "browser": "./dist/rpc-client.mjs",
+      "import": "./dist/rpc-client.mjs",
+      "require": "./dist/rpc-client.cjs"
+    },
+    "./browser": "./dist/rpc-client.js",
+    "./browser.min": "./dist/rpc-client.min.js",
+    "./module": "./dist/rpc-client.mjs",
+    "./module.min": "./dist/rpc-client.min.mjs"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && npm run build:cjs && npm run build:esm && npm run build:browser && npm run build:minify",
+    "build:cjs": "esbuild src/index.mjs --bundle --format=cjs --platform=node --target=es2020 --outfile=dist/rpc-client.cjs",
+    "build:esm": "esbuild src/index.mjs --bundle --format=esm --platform=browser --target=es2020 --outfile=dist/rpc-client.mjs",
+    "build:browser": "esbuild src/index.mjs --bundle --format=iife --global-name=RpcToolkitClient --platform=browser --target=es2020 --outfile=dist/rpc-client.js",
+    "build:minify": "terser dist/rpc-client.js -o dist/rpc-client.min.js --compress --mangle --comments false --ecma 2020 && terser dist/rpc-client.mjs -o dist/rpc-client.min.mjs --compress --mangle --comments false --module --ecma 2020",
+    "test": "npm run build && node --test",
+    "prepack": "npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n-car/rpc-toolkit-js-client.git"
+  },
+  "keywords": [
+    "json-rpc",
+    "jsonrpc",
+    "rpc",
+    "client",
+    "browser",
+    "nodejs",
+    "safe-mode",
+    "rpc-toolkit"
+  ],
+  "author": "Nicola Carpanese <nicola.carpanese@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "terser": "^5.43.1"
+  }
+}
