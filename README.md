@@ -15,29 +15,40 @@ Requires Node.js 18+ when used outside the browser.
 ## Node
 
 ```js
-const { RpcClient } = require('rpc-toolkit-js-client');
+const { RpcClient, RpcSafeClient } = require('rpc-toolkit-js-client');
 
 const client = new RpcClient('http://localhost:3000/rpc');
 const result = await client.call('math.add', { a: 2, b: 3 });
+
+const safeClient = new RpcSafeClient('http://localhost:3000/rpc');
+const status = await safeClient.call('tray.status');
 ```
 
 ## Browser Module
 
 ```html
 <script type="module">
-  import { RpcClient } from '/vendor/rpc-client/rpc-client.mjs';
+  import { RpcClient, RpcSafeClient } from '/vendor/rpc-client/rpc-client.mjs';
 
   const client = new RpcClient('/rpc');
   const status = await client.call('tray.status');
+
+  const safeClient = new RpcSafeClient('/rpc');
+  await safeClient.notify('tray.opened');
 </script>
 ```
 
 ## Browser Global
 
 ```html
-<script src="/vendor/rpc-client/rpc-client.js"></script>
+<script src="/vendor/rpc-client/rpc-client.min.js"></script>
 <script>
   const client = new RpcToolkitClient.RpcClient('/rpc');
+  const safeClient = new RpcToolkitClient.RpcSafeClient('/rpc');
+
+  client.call('tray.status').then((status) => {
+    console.log(status);
+  });
 </script>
 ```
 
