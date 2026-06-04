@@ -57,6 +57,8 @@ const client = new RpcSafeClient('http://localhost:3000/rpc');
 
 The client sends `X-RPC-Safe-Enabled` on every request and reads the same header from responses to deserialize results correctly.
 
+Notifications are sent without an `id`, as required by JSON-RPC 2.0. A valid empty `204` response is accepted, including for `RpcSafeClient`.
+
 ## API
 
 - `new RpcClient(endpoint, headers?, options?)`
@@ -72,3 +74,7 @@ Options:
 - `requireSafeHeader`: when Safe Mode is enabled, require server compatibility header. Defaults to `true`.
 - `fetch`: custom fetch implementation for tests or non-standard runtimes.
 - `fetchOptions`: extra options merged into each fetch call.
+- `maxSerializationDepth`: maximum nested depth before serialization fails. Defaults to `100`.
+- `maxDeserializationDepth`: maximum nested depth before deserialization fails. Defaults to `100`.
+
+Serialization and deserialization detect circular references and keep `__proto__` keys as inert own properties.

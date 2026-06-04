@@ -43,6 +43,7 @@ var RpcToolkitClient = (() => {
     default: () => index_default
   });
   var SAFE_HEADER = "X-RPC-Safe-Enabled";
+  var DEFAULT_MAX_SERIALIZATION_DEPTH = 100;
   var ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
   var RpcError = class extends Error {
     constructor(error) {
@@ -61,7 +62,7 @@ var RpcToolkitClient = (() => {
       this.body = body;
     }
   };
-  var _endpoint, _defaultHeaders, _fetch, _fetchOptions, _options, _requestId, _RpcClient_instances, nextId_fn, createRequest_fn, postJson_fn, warn_fn;
+  var _endpoint, _defaultHeaders, _fetch, _fetchOptions, _options, _requestId, _RpcClient_instances, serializeValue_fn, nextId_fn, createRequest_fn, postJson_fn, warn_fn;
   var RpcClient = class {
     constructor(endpoint, defaultHeaders = {}, options = {}) {
       __privateAdd(this, _RpcClient_instances);
@@ -88,7 +89,9 @@ var RpcToolkitClient = (() => {
       __privateSet(this, _options, {
         safeEnabled: options.safeEnabled === true,
         warnOnUnsafe: options.warnOnUnsafe !== false,
-        requireSafeHeader: options.requireSafeHeader !== false
+        requireSafeHeader: options.requireSafeHeader !== false,
+        maxSerializationDepth: normalizeDepthLimit(options.maxSerializationDepth),
+        maxDeserializationDepth: normalizeDepthLimit(options.maxDeserializationDepth)
       });
       __privateSet(this, _requestId, Date.now() * 1e3 + Math.floor(Math.random() * 1e3));
     }
@@ -107,7 +110,10 @@ var RpcToolkitClient = (() => {
       });
     }
     async notify(method, params = void 0, overrideHeaders = {}) {
-      await this.call(method, params, null, overrideHeaders);
+      const request = __privateMethod(this, _RpcClient_instances, createRequest_fn).call(this, method, params);
+      await __privateMethod(this, _RpcClient_instances, postJson_fn).call(this, request, overrideHeaders, {
+        requireSafeHeader: false
+      });
     }
     async batch(requests, overrideHeaders = {}) {
       if (!Array.isArray(requests) || requests.length === 0) {
@@ -131,41 +137,20 @@ var RpcToolkitClient = (() => {
       });
     }
     serializeBigIntsAndDates(value) {
-      if (typeof value === "bigint") {
-        return `${value.toString()}n`;
-      }
-      if (value instanceof Date) {
-        const isoString = value.toISOString();
-        if (__privateGet(this, _options).safeEnabled) {
-          return `D:${isoString}`;
-        }
-        __privateMethod(this, _RpcClient_instances, warn_fn).call(this, "Date serialization: using plain ISO string format. Enable safeEnabled for explicit date round-trips.");
-        return isoString;
-      }
-      if (typeof value === "string") {
-        if (__privateGet(this, _options).safeEnabled) {
-          return `S:${value}`;
-        }
-        if (/^-?\d+n?$/.test(value)) {
-          __privateMethod(this, _RpcClient_instances, warn_fn).call(this, `String serialization: "${value}" can be confused with a BigInt. Enable safeEnabled to disambiguate.`);
-        }
-        return value;
-      }
-      if (Array.isArray(value)) {
-        return value.map((item) => this.serializeBigIntsAndDates(item));
-      }
-      if (value && typeof value === "object") {
-        return Object.fromEntries(
-          Object.entries(value).map(([key, item]) => [
-            key,
-            this.serializeBigIntsAndDates(item)
-          ])
-        );
-      }
-      return value;
+      return __privateMethod(this, _RpcClient_instances, serializeValue_fn).call(this, value, {
+        depth: 0,
+        seen: /* @__PURE__ */ new WeakSet()
+      });
     }
-    deserializeBigIntsAndDates(value, options = null) {
+    deserializeBigIntsAndDates(value, options = null, state = null) {
       const safeEnabled = options ? options.safeEnabled : __privateGet(this, _options).safeEnabled;
+      const traversalState = state || {
+        depth: 0,
+        seen: /* @__PURE__ */ new WeakSet()
+      };
+      if (traversalState.depth > __privateGet(this, _options).maxDeserializationDepth) {
+        throw new Error("Deserialization depth limit exceeded");
+      }
       if (typeof value === "string") {
         if (safeEnabled && value.startsWith("S:")) {
           return value.substring(2);
@@ -187,15 +172,51 @@ var RpcToolkitClient = (() => {
         }
       }
       if (Array.isArray(value)) {
-        return value.map((item) => this.deserializeBigIntsAndDates(item, options));
+        if (traversalState.seen.has(value)) {
+          throw new Error("Circular reference detected during deserialization");
+        }
+        traversalState.seen.add(value);
+        try {
+          return value.map(
+            (item) => this.deserializeBigIntsAndDates(
+              item,
+              { safeEnabled },
+              {
+                depth: traversalState.depth + 1,
+                seen: traversalState.seen
+              }
+            )
+          );
+        } finally {
+          traversalState.seen.delete(value);
+        }
       }
       if (value && typeof value === "object") {
-        return Object.fromEntries(
-          Object.entries(value).map(([key, item]) => [
-            key,
-            this.deserializeBigIntsAndDates(item, options)
-          ])
-        );
+        if (traversalState.seen.has(value)) {
+          throw new Error("Circular reference detected during deserialization");
+        }
+        traversalState.seen.add(value);
+        const result = {};
+        try {
+          Object.entries(value).forEach(([key, item]) => {
+            Object.defineProperty(result, key, {
+              value: this.deserializeBigIntsAndDates(
+                item,
+                { safeEnabled },
+                {
+                  depth: traversalState.depth + 1,
+                  seen: traversalState.seen
+                }
+              ),
+              enumerable: true,
+              configurable: true,
+              writable: true
+            });
+          });
+        } finally {
+          traversalState.seen.delete(value);
+        }
+        return result;
       }
       return value;
     }
@@ -207,6 +228,71 @@ var RpcToolkitClient = (() => {
   _options = new WeakMap();
   _requestId = new WeakMap();
   _RpcClient_instances = new WeakSet();
+  serializeValue_fn = function(value, state) {
+    if (state.depth > __privateGet(this, _options).maxSerializationDepth) {
+      throw new Error("Serialization depth limit exceeded");
+    }
+    if (typeof value === "bigint") {
+      return `${value.toString()}n`;
+    }
+    if (value instanceof Date) {
+      const isoString = value.toISOString();
+      if (__privateGet(this, _options).safeEnabled) {
+        return `D:${isoString}`;
+      }
+      __privateMethod(this, _RpcClient_instances, warn_fn).call(this, "Date serialization: using plain ISO string format. Enable safeEnabled for explicit date round-trips.");
+      return isoString;
+    }
+    if (typeof value === "string") {
+      if (__privateGet(this, _options).safeEnabled) {
+        return `S:${value}`;
+      }
+      if (/^-?\d+n?$/.test(value)) {
+        __privateMethod(this, _RpcClient_instances, warn_fn).call(this, `String serialization: "${value}" can be confused with a BigInt. Enable safeEnabled to disambiguate.`);
+      }
+      return value;
+    }
+    if (Array.isArray(value)) {
+      if (state.seen.has(value)) {
+        throw new Error("Circular reference detected during serialization");
+      }
+      state.seen.add(value);
+      try {
+        return value.map(
+          (item) => __privateMethod(this, _RpcClient_instances, serializeValue_fn).call(this, item, {
+            depth: state.depth + 1,
+            seen: state.seen
+          })
+        );
+      } finally {
+        state.seen.delete(value);
+      }
+    }
+    if (value && typeof value === "object") {
+      if (state.seen.has(value)) {
+        throw new Error("Circular reference detected during serialization");
+      }
+      state.seen.add(value);
+      const result = {};
+      try {
+        Object.entries(value).forEach(([key, item]) => {
+          Object.defineProperty(result, key, {
+            value: __privateMethod(this, _RpcClient_instances, serializeValue_fn).call(this, item, {
+              depth: state.depth + 1,
+              seen: state.seen
+            }),
+            enumerable: true,
+            configurable: true,
+            writable: true
+          });
+        });
+      } finally {
+        state.seen.delete(value);
+      }
+      return result;
+    }
+    return value;
+  };
   nextId_fn = function() {
     return ++__privateWrapper(this, _requestId)._;
   };
@@ -216,15 +302,17 @@ var RpcToolkitClient = (() => {
     }
     const request = {
       jsonrpc: "2.0",
-      method,
-      id
+      method
     };
+    if (id !== void 0) {
+      request.id = id;
+    }
     if (params !== void 0 && params !== null) {
       request.params = this.serializeBigIntsAndDates(params);
     }
     return request;
   };
-  postJson_fn = async function(payload, overrideHeaders) {
+  postJson_fn = async function(payload, overrideHeaders, options = {}) {
     const response = await __privateGet(this, _fetch).call(this, __privateGet(this, _endpoint), {
       method: "POST",
       headers: {
@@ -240,7 +328,7 @@ var RpcToolkitClient = (() => {
       throw new RpcHttpError(response, body);
     }
     const safeHeader = response.headers?.get?.(SAFE_HEADER);
-    if (__privateGet(this, _options).safeEnabled && safeHeader == null && __privateGet(this, _options).requireSafeHeader) {
+    if (__privateGet(this, _options).safeEnabled && safeHeader == null && __privateGet(this, _options).requireSafeHeader && options.requireSafeHeader !== false) {
       throw new Error(
         "RPC Compatibility Error: client safeEnabled=true but the server did not return X-RPC-Safe-Enabled."
       );
@@ -272,6 +360,9 @@ var RpcToolkitClient = (() => {
       return null;
     }
     return JSON.parse(text);
+  }
+  function normalizeDepthLimit(value) {
+    return Number.isInteger(value) && value >= 0 ? value : DEFAULT_MAX_SERIALIZATION_DEPTH;
   }
   var index_default = RpcClient;
   return __toCommonJS(index_exports);

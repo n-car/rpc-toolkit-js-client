@@ -92,6 +92,46 @@ describe('RpcClient', () => {
     );
   });
 
+  it('sends notifications without an id and accepts empty responses', async () => {
+    const fetchCalls = [];
+    const client = new RpcClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch(fetchCalls, {
+        status: 204,
+        headers: {},
+        body: null,
+      }),
+      warnOnUnsafe: false,
+    });
+
+    await client.notify('events.track', { name: 'ready' });
+
+    assert.deepEqual(JSON.parse(fetchCalls[0].body), {
+      jsonrpc: '2.0',
+      method: 'events.track',
+      params: { name: 'ready' },
+    });
+  });
+
+  it('does not require response safe header for safe notifications', async () => {
+    const fetchCalls = [];
+    const client = new RpcSafeClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch(fetchCalls, {
+        status: 204,
+        headers: {},
+        body: null,
+      }),
+      warnOnUnsafe: false,
+    });
+
+    await client.notify('events.track', { text: '42n' });
+
+    assert.deepEqual(JSON.parse(fetchCalls[0].body), {
+      jsonrpc: '2.0',
+      method: 'events.track',
+      params: { text: 'S:42n' },
+    });
+  });
+
   it('handles batch responses and RPC errors', async () => {
     const client = new RpcClient('http://localhost/rpc', {}, {
       fetch: fakeFetch([], {
@@ -120,6 +160,60 @@ describe('RpcClient', () => {
     });
 
     await assert.rejects(() => failing.call('missing', undefined, 1), RpcError);
+  });
+
+  it('rejects circular values during serialization and deserialization', () => {
+    const client = new RpcClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch(),
+      warnOnUnsafe: false,
+    });
+    const input = { ok: true };
+    input.self = input;
+
+    assert.throws(
+      () => client.serializeBigIntsAndDates(input),
+      /Circular reference detected during serialization/
+    );
+    assert.throws(
+      () => client.deserializeBigIntsAndDates(input),
+      /Circular reference detected during deserialization/
+    );
+  });
+
+  it('enforces serialization and deserialization depth limits', () => {
+    const client = new RpcClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch(),
+      warnOnUnsafe: false,
+      maxSerializationDepth: 1,
+      maxDeserializationDepth: 1,
+    });
+    const nested = { a: { b: { c: 1 } } };
+
+    assert.throws(
+      () => client.serializeBigIntsAndDates(nested),
+      /Serialization depth limit exceeded/
+    );
+    assert.throws(
+      () => client.deserializeBigIntsAndDates(nested),
+      /Deserialization depth limit exceeded/
+    );
+  });
+
+  it('__proto__ keys stay inert during serialization and deserialization', () => {
+    const client = new RpcClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch(),
+      warnOnUnsafe: false,
+    });
+    const input = JSON.parse('{"__proto__":{"polluted":true},"safe":1}');
+
+    const serialized = client.serializeBigIntsAndDates(input);
+    const deserialized = client.deserializeBigIntsAndDates(input);
+
+    assert.equal(Object.prototype.polluted, undefined);
+    assert.equal(Object.hasOwn(serialized, '__proto__'), true);
+    assert.equal(Object.hasOwn(deserialized, '__proto__'), true);
+    assert.equal(Object.getPrototypeOf(serialized).polluted, undefined);
+    assert.equal(Object.getPrototypeOf(deserialized).polluted, undefined);
   });
 
   it('exposes built CJS exports', async () => {

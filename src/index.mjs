@@ -1,4 +1,5 @@
 const SAFE_HEADER = 'X-RPC-Safe-Enabled';
+const DEFAULT_MAX_SERIALIZATION_DEPTH = 100;
 const ISO_DATE_REGEX =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
 
@@ -50,6 +51,8 @@ export class RpcClient {
       safeEnabled: options.safeEnabled === true,
       warnOnUnsafe: options.warnOnUnsafe !== false,
       requireSafeHeader: options.requireSafeHeader !== false,
+      maxSerializationDepth: normalizeDepthLimit(options.maxSerializationDepth),
+      maxDeserializationDepth: normalizeDepthLimit(options.maxDeserializationDepth),
     };
     this.#requestId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
   }
@@ -73,7 +76,10 @@ export class RpcClient {
   }
 
   async notify(method, params = undefined, overrideHeaders = {}) {
-    await this.call(method, params, null, overrideHeaders);
+    const request = this.#createRequest(method, params);
+    await this.#postJson(request, overrideHeaders, {
+      requireSafeHeader: false,
+    });
   }
 
   async batch(requests, overrideHeaders = {}) {
@@ -107,6 +113,17 @@ export class RpcClient {
   }
 
   serializeBigIntsAndDates(value) {
+    return this.#serializeValue(value, {
+      depth: 0,
+      seen: new WeakSet(),
+    });
+  }
+
+  #serializeValue(value, state) {
+    if (state.depth > this.#options.maxSerializationDepth) {
+      throw new Error('Serialization depth limit exceeded');
+    }
+
     if (typeof value === 'bigint') {
       return `${value.toString()}n`;
     }
@@ -137,23 +154,61 @@ export class RpcClient {
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.serializeBigIntsAndDates(item));
+      if (state.seen.has(value)) {
+        throw new Error('Circular reference detected during serialization');
+      }
+
+      state.seen.add(value);
+      try {
+        return value.map((item) =>
+          this.#serializeValue(item, {
+            depth: state.depth + 1,
+            seen: state.seen,
+          })
+        );
+      } finally {
+        state.seen.delete(value);
+      }
     }
 
     if (value && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [
-          key,
-          this.serializeBigIntsAndDates(item),
-        ])
-      );
+      if (state.seen.has(value)) {
+        throw new Error('Circular reference detected during serialization');
+      }
+
+      state.seen.add(value);
+      const result = {};
+      try {
+        Object.entries(value).forEach(([key, item]) => {
+          Object.defineProperty(result, key, {
+            value: this.#serializeValue(item, {
+              depth: state.depth + 1,
+              seen: state.seen,
+            }),
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        });
+      } finally {
+        state.seen.delete(value);
+      }
+      return result;
     }
 
     return value;
   }
 
-  deserializeBigIntsAndDates(value, options = null) {
+  deserializeBigIntsAndDates(value, options = null, state = null) {
     const safeEnabled = options ? options.safeEnabled : this.#options.safeEnabled;
+    const traversalState = state || {
+      depth: 0,
+      seen: new WeakSet(),
+    };
+
+    if (traversalState.depth > this.#options.maxDeserializationDepth) {
+      throw new Error('Deserialization depth limit exceeded');
+    }
 
     if (typeof value === 'string') {
       if (safeEnabled && value.startsWith('S:')) {
@@ -180,16 +235,54 @@ export class RpcClient {
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.deserializeBigIntsAndDates(item, options));
+      if (traversalState.seen.has(value)) {
+        throw new Error('Circular reference detected during deserialization');
+      }
+
+      traversalState.seen.add(value);
+      try {
+        return value.map((item) =>
+          this.deserializeBigIntsAndDates(
+            item,
+            { safeEnabled },
+            {
+              depth: traversalState.depth + 1,
+              seen: traversalState.seen,
+            }
+          )
+        );
+      } finally {
+        traversalState.seen.delete(value);
+      }
     }
 
     if (value && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [
-          key,
-          this.deserializeBigIntsAndDates(item, options),
-        ])
-      );
+      if (traversalState.seen.has(value)) {
+        throw new Error('Circular reference detected during deserialization');
+      }
+
+      traversalState.seen.add(value);
+      const result = {};
+      try {
+        Object.entries(value).forEach(([key, item]) => {
+          Object.defineProperty(result, key, {
+            value: this.deserializeBigIntsAndDates(
+              item,
+              { safeEnabled },
+              {
+                depth: traversalState.depth + 1,
+                seen: traversalState.seen,
+              }
+            ),
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+        });
+      } finally {
+        traversalState.seen.delete(value);
+      }
+      return result;
     }
 
     return value;
@@ -207,8 +300,11 @@ export class RpcClient {
     const request = {
       jsonrpc: '2.0',
       method,
-      id,
     };
+
+    if (id !== undefined) {
+      request.id = id;
+    }
 
     if (params !== undefined && params !== null) {
       request.params = this.serializeBigIntsAndDates(params);
@@ -217,7 +313,7 @@ export class RpcClient {
     return request;
   }
 
-  async #postJson(payload, overrideHeaders) {
+  async #postJson(payload, overrideHeaders, options = {}) {
     const response = await this.#fetch(this.#endpoint, {
       method: 'POST',
       headers: {
@@ -235,7 +331,12 @@ export class RpcClient {
     }
 
     const safeHeader = response.headers?.get?.(SAFE_HEADER);
-    if (this.#options.safeEnabled && safeHeader == null && this.#options.requireSafeHeader) {
+    if (
+      this.#options.safeEnabled &&
+      safeHeader == null &&
+      this.#options.requireSafeHeader &&
+      options.requireSafeHeader !== false
+    ) {
       throw new Error(
         'RPC Compatibility Error: client safeEnabled=true but the server did not return X-RPC-Safe-Enabled.'
       );
@@ -277,6 +378,12 @@ async function readJsonBody(response) {
   }
 
   return JSON.parse(text);
+}
+
+function normalizeDepthLimit(value) {
+  return Number.isInteger(value) && value >= 0
+    ? value
+    : DEFAULT_MAX_SERIALIZATION_DEPTH;
 }
 
 export default RpcClient;

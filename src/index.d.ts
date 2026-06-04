@@ -2,6 +2,8 @@ export interface RpcClientOptions {
   safeEnabled?: boolean;
   warnOnUnsafe?: boolean;
   requireSafeHeader?: boolean;
+  maxSerializationDepth?: number;
+  maxDeserializationDepth?: number;
   fetch?: typeof fetch;
   fetchOptions?: RequestInit;
 }
@@ -50,7 +52,10 @@ export class RpcClient {
   ): Promise<T[]>;
 
   serializeBigIntsAndDates(value: unknown): unknown;
-  deserializeBigIntsAndDates(value: unknown, options?: { safeEnabled?: boolean }): unknown;
+  deserializeBigIntsAndDates(
+    value: unknown,
+    options?: { safeEnabled?: boolean }
+  ): unknown;
 }
 
 export class RpcSafeClient extends RpcClient {}
