@@ -89,3 +89,7 @@ Options:
 - `maxDeserializationDepth`: maximum nested depth before deserialization fails. Defaults to `100`.
 
 Serialization and deserialization detect circular references and keep `__proto__` keys as inert own properties.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
