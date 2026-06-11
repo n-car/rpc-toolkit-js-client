@@ -1,3 +1,12 @@
+/*!
+ * rpc-toolkit-js-client
+ * Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.
+ * Version: see package.json
+ * Author: Nicola Carpanese (https://github.com/n-car)
+ * Copyright (c) 2026 Nicola Carpanese
+ * SPDX-License-Identifier: MIT
+ */
+
 export interface RpcClientOptions {
   safeEnabled?: boolean;
   warnOnUnsafe?: boolean;

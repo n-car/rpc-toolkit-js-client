@@ -1,3 +1,12 @@
+/*
+ * rpc-toolkit-js-client
+ * Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.
+ * Version: see package.json
+ * Author: Nicola Carpanese (https://github.com/n-car)
+ * Copyright (c) 2026 Nicola Carpanese
+ * SPDX-License-Identifier: MIT
+ */
+
 const SAFE_HEADER = 'X-RPC-Safe-Enabled';
 const DEFAULT_MAX_SERIALIZATION_DEPTH = 100;
 const ISO_DATE_REGEX =
@@ -67,7 +76,7 @@ export class RpcClient {
     }
 
     if (response.body.error) {
-      throw new RpcError(response.body.error);
+      throw new RpcError(this.#deserializeError(response.body.error, response));
     }
 
     return this.deserializeBigIntsAndDates(response.body.result, {
@@ -103,7 +112,7 @@ export class RpcClient {
     const body = Array.isArray(response.body) ? response.body : [response.body];
     return body.map((item) => {
       if (item.error) {
-        throw new RpcError(item.error);
+        throw new RpcError(this.#deserializeError(item.error, response));
       }
 
       return this.deserializeBigIntsAndDates(item.result, {
@@ -311,6 +320,19 @@ export class RpcClient {
     }
 
     return request;
+  }
+
+  #deserializeError(error, response) {
+    if (!error || error.data === undefined) {
+      return error;
+    }
+
+    return {
+      ...error,
+      data: this.deserializeBigIntsAndDates(error.data, {
+        safeEnabled: response.safeEnabled,
+      }),
+    };
   }
 
   async #postJson(payload, overrideHeaders, options = {}) {

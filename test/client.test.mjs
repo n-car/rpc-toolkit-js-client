@@ -160,6 +160,37 @@ describe('RpcClient', () => {
     });
 
     await assert.rejects(() => failing.call('missing', undefined, 1), RpcError);
+
+    const safeFailing = new RpcClient('http://localhost/rpc', {}, {
+      fetch: fakeFetch([], {
+        headers: { 'X-RPC-Safe-Enabled': 'true' },
+        body: {
+          jsonrpc: '2.0',
+          id: 3,
+          error: {
+            code: -32042,
+            message: 'Domain failure',
+            data: {
+              reason: 'S:intentional-test-error',
+              markerString: 'S:S:error-data-literal',
+              nested: { list: ['S:D:nested-literal'] },
+            },
+          },
+        },
+      }),
+      safeEnabled: true,
+      warnOnUnsafe: false,
+    });
+
+    await assert.rejects(
+      () => safeFailing.call('domainError', undefined, 3),
+      (error) =>
+        error instanceof RpcError &&
+        error.code === -32042 &&
+        error.data.reason === 'intentional-test-error' &&
+        error.data.markerString === 'S:error-data-literal' &&
+        error.data.nested.list[0] === 'D:nested-literal'
+    );
   });
 
   it('rejects circular values during serialization and deserialization', () => {

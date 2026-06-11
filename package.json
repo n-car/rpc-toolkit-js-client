@@ -1,6 +1,6 @@
 {
   "name": "rpc-toolkit-js-client",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.",
   "type": "module",
   "main": "./dist/rpc-client.cjs",
@@ -22,17 +22,14 @@
   "files": [
     "dist/",
     "src/",
+    "scripts/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && npm run build:cjs && npm run build:esm && npm run build:browser && npm run build:minify",
-    "build:cjs": "esbuild src/index.mjs --bundle --format=cjs --platform=node --target=es2020 --outfile=dist/rpc-client.cjs",
-    "build:esm": "esbuild src/index.mjs --bundle --format=esm --platform=browser --target=es2020 --outfile=dist/rpc-client.mjs",
-    "build:browser": "esbuild src/index.mjs --bundle --format=iife --global-name=RpcToolkitClient --platform=browser --target=es2020 --outfile=dist/rpc-client.js",
-    "build:minify": "terser dist/rpc-client.js -o dist/rpc-client.min.js --compress --mangle --comments false --ecma 2020 && terser dist/rpc-client.mjs -o dist/rpc-client.min.mjs --compress --mangle --comments false --module --ecma 2020",
+    "build": "node scripts/build.mjs",
     "test": "npm run build && node --test",
     "prepack": "npm run test"
   },
@@ -50,7 +47,10 @@
     "safe-mode",
     "rpc-toolkit"
   ],
-  "author": "Nicola Carpanese <nicola.carpanese@gmail.com>",
+  "author": {
+    "name": "Nicola Carpanese",
+    "url": "https://github.com/n-car"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"

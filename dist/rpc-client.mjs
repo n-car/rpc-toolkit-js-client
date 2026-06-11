@@ -1,3 +1,10 @@
+/*!
+ * rpc-toolkit-js-client v1.1.2
+ * Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.
+ * Author: Nicola Carpanese (https://github.com/n-car)
+ * Copyright (c) 2026 Nicola Carpanese
+ * SPDX-License-Identifier: MIT
+ */
 var __typeError = (msg) => {
   throw TypeError(msg);
 };
@@ -36,7 +43,7 @@ var RpcHttpError = class extends Error {
     this.body = body;
   }
 };
-var _endpoint, _defaultHeaders, _fetch, _fetchOptions, _options, _requestId, _RpcClient_instances, serializeValue_fn, nextId_fn, createRequest_fn, postJson_fn, warn_fn;
+var _endpoint, _defaultHeaders, _fetch, _fetchOptions, _options, _requestId, _RpcClient_instances, serializeValue_fn, nextId_fn, createRequest_fn, deserializeError_fn, postJson_fn, warn_fn;
 var RpcClient = class {
   constructor(endpoint, defaultHeaders = {}, options = {}) {
     __privateAdd(this, _RpcClient_instances);
@@ -77,7 +84,7 @@ var RpcClient = class {
       return void 0;
     }
     if (response.body.error) {
-      throw new RpcError(response.body.error);
+      throw new RpcError(__privateMethod(this, _RpcClient_instances, deserializeError_fn).call(this, response.body.error, response));
     }
     return this.deserializeBigIntsAndDates(response.body.result, {
       safeEnabled: response.safeEnabled
@@ -103,7 +110,7 @@ var RpcClient = class {
     const body = Array.isArray(response.body) ? response.body : [response.body];
     return body.map((item) => {
       if (item.error) {
-        throw new RpcError(item.error);
+        throw new RpcError(__privateMethod(this, _RpcClient_instances, deserializeError_fn).call(this, item.error, response));
       }
       return this.deserializeBigIntsAndDates(item.result, {
         safeEnabled: response.safeEnabled
@@ -286,6 +293,17 @@ createRequest_fn = function(method, params, id) {
   }
   return request;
 };
+deserializeError_fn = function(error, response) {
+  if (!error || error.data === void 0) {
+    return error;
+  }
+  return {
+    ...error,
+    data: this.deserializeBigIntsAndDates(error.data, {
+      safeEnabled: response.safeEnabled
+    })
+  };
+};
 postJson_fn = async function(payload, overrideHeaders, options = {}) {
   const response = await __privateGet(this, _fetch).call(this, __privateGet(this, _endpoint), {
     method: "POST",
@@ -346,3 +364,4 @@ export {
   RpcSafeClient,
   index_default as default
 };
+//# sourceMappingURL=rpc-client.mjs.map

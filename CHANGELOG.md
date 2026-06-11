@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2] - 2026-06-11
+
+### Added
+- Publish source maps for CommonJS, ESM, browser, and minified browser bundles.
+- Add package metadata banners to generated bundles and source headers.
+
+### Fixed
+- Decode Safe Mode `error.data` recursively before throwing `RpcError`.
+
 ## [1.1.0] - 2026-06-04
 
 ### Changed
