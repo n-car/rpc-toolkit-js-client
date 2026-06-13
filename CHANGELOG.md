@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Add runnable Node.js and browser examples with a local dependency-free JSON-RPC mock server.
+
 ## [1.1.2] - 2026-06-11
 
 ### Added

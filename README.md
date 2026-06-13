@@ -52,6 +52,22 @@ const status = await safeClient.call('tray.status');
 </script>
 ```
 
+## Examples
+
+Runnable examples are available in [`examples/`](examples/):
+
+- `mock-server.mjs` - dependency-free local JSON-RPC endpoint for examples.
+- `node-client.mjs` - Node.js client covering standard JSON-RPC and Safe Mode.
+- `browser-module.html` - browser example using the ESM bundle.
+- `browser-global.html` - browser example using the global browser bundle.
+
+```bash
+npm install
+npm run build
+npm run example:server
+npm run example:node
+```
+
 ## Safe Mode
 
 Safe Mode adds explicit prefixes for ambiguous types:

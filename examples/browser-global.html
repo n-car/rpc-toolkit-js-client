@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>RPC Toolkit JS Client - Browser Global Example</title>
+    <style>
+      body {
+        color: #111827;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 2rem;
+        max-width: 760px;
+      }
+
+      button,
+      input {
+        display: block;
+        font: inherit;
+      }
+
+      input {
+        box-sizing: border-box;
+        margin: 0.25rem 0 0.75rem;
+        padding: 0.5rem;
+        width: 100%;
+      }
+
+      button {
+        padding: 0.5rem 0.75rem;
+      }
+
+      pre {
+        background: #f3f4f6;
+        overflow: auto;
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Browser Global Example</h1>
+
+    <label for="endpoint">RPC endpoint</label>
+    <input id="endpoint" value="/rpc">
+    <button id="run">Run checks</button>
+
+    <pre id="output">Ready.</pre>
+
+    <script src="../dist/rpc-client.min.js"></script>
+    <script>
+      const endpointInput = document.querySelector('#endpoint');
+      const output = document.querySelector('#output');
+
+      document.querySelector('#run').addEventListener('click', async () => {
+        output.textContent = 'Running...';
+
+        try {
+          const client = new RpcToolkitClient.RpcSafeClient(endpointInput.value);
+          const ping = await client.call('ping');
+          const batch = await client.batch([
+            { method: 'ping', id: 1 },
+            { method: 'sumArray', params: [1, 2, 3], id: 2 },
+          ]);
+
+          await client.notify('notify.record', {
+            eventName: 'browser-global-example',
+          });
+          const stats = await client.call('notify.stats');
+
+          output.textContent = stringify(
+            {
+              ping,
+              batch,
+              notificationCount: stats.count,
+            }
+          );
+        } catch (error) {
+          output.textContent = `${error.name}: ${error.message}`;
+        }
+      });
+
+      function stringify(value) {
+        return JSON.stringify(
+          value,
+          (_key, item) => (typeof item === 'bigint' ? item.toString() : item),
+          2
+        );
+      }
+    </script>
+  </body>
+</html>
