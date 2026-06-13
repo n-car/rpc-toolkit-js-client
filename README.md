@@ -1,5 +1,12 @@
 # RPC Toolkit JS Client
 
+[![CI](https://github.com/n-car/rpc-toolkit-js-client/actions/workflows/ci.yml/badge.svg)](https://github.com/n-car/rpc-toolkit-js-client/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/rpc-toolkit-js-client.svg)](https://www.npmjs.com/package/rpc-toolkit-js-client)
+[![npm downloads](https://img.shields.io/npm/dm/rpc-toolkit-js-client.svg)](https://www.npmjs.com/package/rpc-toolkit-js-client)
+[![node](https://img.shields.io/node/v/rpc-toolkit-js-client.svg)](https://www.npmjs.com/package/rpc-toolkit-js-client)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-toolkit-js-client/releases)
+
 Shared JavaScript client for RPC Toolkit JSON-RPC 2.0 endpoints.
 
 It is the browser/Node client used by toolkit implementations such as `rpc-express-toolkit` and `rpc-dotnet-toolkit`.
