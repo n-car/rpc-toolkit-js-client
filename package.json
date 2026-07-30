@@ -9,10 +9,18 @@
   "types": "./src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "browser": "./dist/rpc-client.mjs",
-      "import": "./dist/rpc-client.mjs",
-      "require": "./dist/rpc-client.cjs"
+      "browser": {
+        "types": "./src/index.d.mts",
+        "default": "./dist/rpc-client.mjs"
+      },
+      "import": {
+        "types": "./src/index.d.mts",
+        "default": "./dist/rpc-client.mjs"
+      },
+      "require": {
+        "types": "./src/index.d.cts",
+        "default": "./dist/rpc-client.cjs"
+      }
     },
     "./browser": "./dist/rpc-client.js",
     "./browser.min": "./dist/rpc-client.min.js",
