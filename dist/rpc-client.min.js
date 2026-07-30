@@ -1,5 +1,5 @@
 /*!
- * rpc-toolkit-js-client v1.1.2
+ * rpc-toolkit-js-client v1.1.3
  * Shared JavaScript client for RPC Toolkit JSON-RPC endpoints in browsers and Node.js.
  * Author: Nicola Carpanese (https://github.com/n-car)
  * Copyright (c) 2026 Nicola Carpanese
